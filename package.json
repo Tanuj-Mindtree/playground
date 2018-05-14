@@ -1,0 +1,15 @@
+{
+  "name": "playground2",
+  "version": "1.0.0",
+  "description": "Contains assignment 2",
+  "main": "app.js",
+  "scripts": {
+    "test": "node app.js"
+  },
+  "author": "Tanuj Bohra",
+  "license": "ISC",
+  "dependencies": {
+    "npm": "^6.0.1",
+    "yargs": "^11.0.0"
+  }
+}
