@@ -7,7 +7,7 @@ let command = args._[0];
 switch (command) {
 
   case ('addDetail'):
-    //logic
+    helper.addDetail(args.topic,args.marks);
     break;
 
   case ('showDetails'):

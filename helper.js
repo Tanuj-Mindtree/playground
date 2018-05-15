@@ -6,9 +6,18 @@ let detail = {
 };
 
 module.exports = {
-  addDetail: (topic,marks) => {
-    //logic to store data in details and then with the help of fs write into file
-    return "success!!"; //or fail accordingly
+  addDetail: (topic, marks) => {
+    detail.topic = topic;
+    detail.marks = marks;
+    try {
+      details = JSON.parse(fs.readFileSync("details.json"));
+    } catch (e) {
+       console.log("creating a file!!!!");
+    }
+    details.push(detail);
+    fs.writeFileSync("details.json",JSON.stringify(details));
+    console.log(details);
+    //return "success!!"; //or fail accordingly
   },
 
   showDetails: () => {
