@@ -1,0 +1,198 @@
+const file = require('./file');
+const audit = require('./audit');
+
+function getReply(deviceNames, deviceName, multiple, checkIn) {
+
+  console.log("@@@@@@@@@@@@@");
+  console.log(`${deviceName}${multiple}${checkIn}`);
+  console.log("@@@@@@@@@@@@@");
+
+  if (deviceNames.length > 0) reply = {
+    'attachments': [{
+      'title': 'Checkin Successful !',
+      'text': deviceNames.join(' ') + ' successfully checked in and now added to locker.',
+      'color': '#01a3a4'
+    }]
+  }
+  else if (!multiple && deviceName == 'invalid') reply = {
+    'attachments': [{
+      'title': 'Checkin Failed !',
+      'text': 'Please enter valid device name or id.',
+      'color': '#ee5253'
+    }]
+  }
+  else if (!multiple && deviceName != 'invalid' && !checkIn) reply = {
+    'attachments': [{
+      'title': 'Checkin Failed !',
+      'text': deviceName + ' is not checked out by you.',
+      'color': '#ee5253'
+    }]
+  }
+  else reply = {
+    'attachments': [{
+      'title': 'Checkin Failed !',
+      'text': 'You don\'t have any device checked out with you.',
+      'color': '#ee5253'
+    }]
+  }
+  return reply;
+}
+
+
+
+function setDeviceDetails(deviceData, msg, userInfo, device, deviceName, deviceNames, checkIn, id) {
+  deviceName = device;
+  console.log(deviceData[msg.team][id]);
+  if (deviceData[msg.team][id].location.slice(1, -1).toLowerCase() ==
+    userInfo.user.profile.real_name.toLowerCase()) {
+    deviceData[msg.team][id].location = 'locker';
+    deviceData[msg.team][id].status = 'available';
+    deviceData[msg.team][id].userid = '';
+    deviceData[msg.team][id].channelid = '';
+    deviceData[msg.team][id].period = 0;
+    deviceNames.push(device);
+    deviceName = device;
+    checkIn = true;
+  }
+}
+
+function checkin(bot, msg, multiple) {
+  let deviceData = file.get(),
+    deviceNames = [],
+    checkIn = false,
+    deviceName = 'invalid',
+    reply = '',
+    id = msg.match[1];
+  if (deviceData[msg.team]) {
+    bot.api.users.info({
+      user: msg.user
+    }, function(err, userInfo) {
+      if (err) bot.botkit.log('Failed to get user details:(', err);
+      else {
+
+        //##################################################
+
+
+
+        if (deviceData[msg.team]["`" + msg.match[1] + "`"]) {
+          console.log("By id");
+          let device = deviceData[msg.team]["`" + msg.match[1] + "`"].device;
+          id = "`" + msg.match[1] + "`";
+          if (deviceData[msg.team][id].location.slice(1, -1).toLowerCase() !=
+            userInfo.user.profile.real_name.toLowerCase()) {
+            deviceName=deviceData[msg.team][id].device;
+          } else {
+            setDeviceDetails(deviceData, msg, userInfo, device, deviceName, deviceNames, checkIn, id);
+          }
+        }
+        else{
+          let found=0
+          for(let data in deviceData[msg.team]){
+            console.log(deviceData[msg.team][data].device +'@@@@'+ "`" + msg.match[1] + "`");
+            if(deviceData[msg.team][data].device== "`" + msg.match[1] + "`")
+            {
+              found=1
+              deviceName=deviceData[msg.team][data].device
+            }
+          }
+          ////////////////
+          if(found==1){
+            console.log("By name");
+            let device = msg.match[1];
+            let matchDevices = [];
+            Object.keys(deviceData[msg.team]).some(function(id) {
+              if (deviceData[msg.team][id].location.slice(1, -1).toLowerCase() ==
+                userInfo.user.profile.real_name.toLowerCase()) {
+                matchDevices.push(id);
+              }
+            });
+
+            if (matchDevices.length == 1) {
+              console.log("By name length 1");
+              setDeviceDetails(deviceData, msg, userInfo, device, deviceName, deviceNames, checkIn, matchDevices[0])
+            }
+
+            else if(matchDevices.length > 1){
+              console.log("By name length > 1");
+              let deviceDetails = [];
+              matchDevices.forEach(function(id) {
+                let d = id + ' ' + deviceData[msg.team][id].device;
+                d = (deviceData[msg.team][id].os) ? d + ' `OS: ' + deviceData[msg.team][id].os + '`' : d;
+                deviceDetails.push(d);
+              });
+              debugger;
+              /////////////////////////////////////////////
+              bot.startConversation(msg, function(res, convo) {
+                convo.ask(`Multiple device found! \n Enter the id of required device from below list.\n` +
+                  deviceDetails.join('\n'),
+                  function(res, convo) {
+                    deviceId = '`' + res.text + '`';
+                    if (deviceData[msg.team][deviceId]) {
+                      deviceStatus = (deviceData[msg.team][deviceId].location == 'locker') ? 'available' : 'busy';
+                      reqDevice = deviceData[msg.team][deviceId].device;
+                      replyDeviceStatus(convo, team, deviceStatus, reqDevice, deviceId, deviceData, callback);
+                    } else {
+                      convo.say('Incorrect device id was entered.\n' +
+                        'Checkout cancelled, please try with valid device id again.');
+                      convo.next();
+                      callback(null);
+                    }
+                  });
+              });
+            }
+
+          }
+
+          ////////
+          //else
+
+        }
+        //if (!multiple) return checkIn;
+
+        //##################################################
+
+        file.save(deviceData);
+        reply = getReply(deviceNames, deviceName, multiple, checkIn)
+      }
+
+      bot.reply(msg, reply);
+      if (!multiple && deviceName != 'invalid' && !checkIn) {
+        audit.whereIs(bot, msg);
+        audit.status(bot, msg);
+      }
+    });
+  } else {
+    let admins = file.getAdmins();
+    let text = '';
+
+    if (admins[msg.team]) {
+      text = 'Contact admin ' + Object.keys(admins[msg.team]).join(' ') + ' to add devices.';
+    } else {
+      text = 'Admin needs to add devices to your workspace.\n' +
+        'Currently your workspace does not have any admin user.\n' +
+        'To get yourself admin access request by typing `make me admin`\n' +
+        'For any further queries contact `Pranit Mahajan`'
+    }
+
+    reply = {
+      'attachments': [{
+        'title': 'You have not checked out any device',
+        'text': 'There\'s no device added for you workspace.\n' + text,
+        'color': '#ee5253'
+      }]
+    }
+    bot.reply(msg, reply);
+  }
+}
+
+module.exports = {
+
+  all: function(bot, msg) {
+    checkin(bot, msg, true);
+  },
+
+  device: function(bot, msg) {
+    checkin(bot, msg, false);
+  }
+
+}
